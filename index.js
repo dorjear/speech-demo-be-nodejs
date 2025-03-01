@@ -77,18 +77,38 @@ app.post('/api/Voice/upload', upload.single('file'), async (req, res) => {
       try {
         const audioFile = fs.readFileSync(wavFilePath);
 
-        const response = await axios({
-          method: 'post',
-          url: `https://${process.env.AZURE_REGION}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`,
-          headers: {
-            'Content-Type': 'audio/wav',
-            'Ocp-Apim-Subscription-Key': process.env.AZURE_SPEECH_KEY
-          },
-          data: audioFile
-        });
-        console.log("The response is " + JSON.stringify(response.data))
+        const audioConfig = sdk.AudioConfig.fromWavFileInput(audioFile);
+        const speechConfig = sdk.SpeechTranslationConfig.fromSubscription(process.env.AZURE_SPEECH_KEY, process.env.AZURE_REGION);
+        speechConfig.speechRecognitionLanguage = 'en-US'; // E.g., 'en-US', 'fr-FR'
 
-        res.json(response.data);
+        const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+
+        recognizer.recognizeOnceAsync((result) => {
+          if (result.reason === sdk.ResultReason.RecognizedSpeech) {
+            const displayText = result.text;
+            console.log("The response is " + displayText)
+
+            res.json({DisplayText: displayText});
+          } else {
+            res.status(500).json({error: 'Could not translate the audio'});
+          }
+
+          recognizer.close();
+        })
+
+        // The following is doing same with Restful call rather than SDK.
+        //   const response = await axios({
+        //   method: 'post',
+        //   url: `https://${process.env.AZURE_REGION}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`,
+        //   headers: {
+        //     'Content-Type': 'audio/wav',
+        //     'Ocp-Apim-Subscription-Key': process.env.AZURE_SPEECH_KEY
+        //   },
+        //   data: audioFile
+        // });
+        // console.log("The response is " + JSON.stringify(response.data))
+        //
+        // res.json(response.data);
       } catch (error) {
         console.error('Error processing audio file:', error);
         res.status(500).send('Error processing audio file');
